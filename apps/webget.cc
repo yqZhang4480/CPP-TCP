@@ -36,7 +36,7 @@ void get_URL(const string &host, const string &path) {
             socket_connect.close();
             break;
         }
-        cout << str << endl;
+        cout << str;
     }
 }
 
