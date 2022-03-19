@@ -8,7 +8,28 @@ using namespace std;
 
 void get_URL(const string &host, const string &path) {
     // Your code here.
-
+    TCPSocket socket;
+    Address address(host,"http"); 
+    socket.connect(address);
+    socket.write("\r\n");
+    socket.write("GET ");
+    socket.write(path);
+    socket.write(" HTTP/1.1\r\n");
+    socket.write("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.30\r\n");
+		socket.write("Host: cs144.keithw.org\r\n");
+    socket.write("Connection: close\r\n\r\n");
+		socket.write("\r\n");
+    while(true){
+        auto str = socket.read();
+        if(socket.eof()){
+            socket.close();
+            break;
+        }
+        cout<<str;
+    }
+     
+		
+		
     // You will need to connect to the "http" service on
     // the computer whose name is in the "host" string,
     // then request the URL path given in the "path" string.
@@ -17,27 +38,8 @@ void get_URL(const string &host, const string &path) {
     // (not just one call to read() -- everything) until you reach
     // the "eof" (end of file).
 
-    TCPSocket socket_connect;
-    socket_connect.connect(Address(host, "http"));
-
-    socket_connect.write("\r\n");
-    socket_connect.write("GET ");
-    socket_connect.write(path);
-    socket_connect.write(" HTTP/1.1\r\n");
-    socket_connect.write("Host: cs144.keithw.org\r\n");
-    socket_connect.write("Connection: close\r\n\r\n");
-    socket_connect.write("\r\n");
-
-    while (true)
-    {
-        auto str = socket_connect.read();
-        if (socket_connect.eof())
-        {
-            socket_connect.close();
-            break;
-        }
-        cout << str;
-    }
+    cerr << "Function called: get_URL(" << host << ", " << path << ").\n";
+    cerr << "Warning: get_URL() has not been implemented yet.\n";
 }
 
 int main(int argc, char *argv[]) {
