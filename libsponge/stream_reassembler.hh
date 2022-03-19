@@ -5,15 +5,21 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
+#include <map>
 
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
 class StreamReassembler {
   private:
     // Your code here -- add private members as necessary.
-
     ByteStream _output;  //!< The reassembled in-order byte stream
     size_t _capacity;    //!< The maximum number of bytes
+    
+    size_t _first_unread = 0;
+    size_t _first_unassembled = 0;
+    map<size_t, string> _datas;
+    map<size_t, size_t> _data_begin_end_map;
 
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
@@ -33,8 +39,8 @@ class StreamReassembler {
 
     //! \name Access the reassembled byte stream
     //!@{
-    const ByteStream &stream_out() const { return _output; }
-    ByteStream &stream_out() { return _output; }
+    const ByteStream &stream_out() const;
+    ByteStream &stream_out();
     //!@}
 
     //! The number of bytes in the substrings stored but not yet reassembled
