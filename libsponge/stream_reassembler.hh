@@ -16,8 +16,10 @@ class StreamReassembler {
     ByteStream _output;  //!< The reassembled in-order byte stream
     size_t _capacity;    //!< The maximum number of bytes
     
+    bool _eofed;
     size_t _first_unread;
     size_t _first_unassembled;
+    size_t _max_end;
     std::map<size_t, std::string> _datas;
     std::map<size_t, size_t> _data_begin_end_map;
 
