@@ -19,9 +19,9 @@ class StreamReassembler {
     bool _eofed;
     size_t _first_unread;
     size_t _first_unassembled;
-    size_t _max_end;
-    std::map<size_t, std::string> _datas;
-    std::map<size_t, size_t> _data_begin_end_map;
+    size_t _first_unacceptable;
+    std::vector<char> _buffer;
+    std::vector<size_t> _count;
 
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
