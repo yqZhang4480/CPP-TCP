@@ -16,7 +16,7 @@ StreamReassembler::StreamReassembler(const size_t capacity) :
     _output(capacity), _capacity(capacity),
     _eofed(false),
     _first_unread(0), _first_unassembled(0), _first_unacceptable(0),
-    _buffer(capacity), _count(capacity) {}
+    _buffer(capacity, 0), _count(capacity, 0) { cout << "== CTOR CALLED, CAP "<< capacity << " ==" << endl; }
 
 //! \details This function accepts a substring (aka a segment) of bytes,
 //! possibly out-of-order, from the logical stream, and assembles any newly
@@ -25,24 +25,27 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
 {
     DUMMY_CODE(data, index, eof);
 
-    std::cout << "ptr:    " << this << "\t";
-    std::cout << "length: " << data.length() << "\t";
-    std::cout << "index:  " << index << "\t";
-    std::cout << "eof:    " << eof << "\t";
-
+    _first_unread = _output.bytes_read();
+    _buffer.resize(_first_unread + _capacity, 0);
+    _count.resize(_first_unread + _capacity, 0);
     _eofed |= eof;
 
     for (size_t i = 0; i < data.length(); i++)
     {
         size_t real_index = index + i;
-        if (real_index < _buffer.size())
-        {
-            _buffer[real_index] = data[i];
-            ++_count[real_index];
-        }
-
         _first_unacceptable = _first_unacceptable < (real_index + 1) ? (real_index + 1) : _first_unacceptable;
+        if (real_index >= _buffer.size())
+        {
+            std::cout << "!!" << std::endl;
+            break;
+        }
+        _buffer[real_index] = data[i];
+        ++_count[real_index];
+        // cout << "#" << real_index << "#";
+        // cout << "$" << _first_unassembled << "$";
+        /* cout << "!" << _count[real_index] << "!" << endl; */
     }
+
 
     auto s = std::string();
     while (_count[_first_unassembled])
@@ -54,20 +57,29 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         s.push_back(_buffer[_first_unassembled]);
         ++_first_unassembled;
     }
+    if (s.length())
+    {
+        std::cout << "== assembled " << s.length() << " ==" << std::endl;
+    }
+    
     _output.write(s);
 
-    std::cout << "uas:    " << _first_unassembled << "\t";
-    std::cout << "uac:    " << _first_unacceptable << "\t";
-    std::cout << "write:  " << _output.bytes_written() << "\t";
-    std::cout << "read:   " << _output.bytes_read() << "\t";
-    
-    _first_unread = _output.bytes_read();
-    _buffer.resize(_first_unread + _capacity);
-    _count.resize(_first_unread + _capacity);
+    std::cout << "len: " << data.length() << "\t";
+    std::cout << "idx: " << index << "\t";
+    std::cout << "eof: " << eof << "\t";
+    std::cout << "ure: " << _first_unread << "\t";
+    std::cout << "uas: " << _first_unassembled << "\t";
+    std::cout << "uac: " << _first_unacceptable << "\t";
+    std::cout << "written: " << _output.bytes_written() << "\t";
+    std::cout << "read: " << _output.bytes_read() << "\t";
+    std::cout << "bsize: " << _buffer.size() << std::endl;
+    /*for (size_t i = _first_unread; i < _first_unacceptable; i++)
+    {
+        std::cout << _count[i];
+    }
+    std::cout << std::endl;*/
 
-    std::cout << "buffer: " << _buffer.size() << std::endl;
-
-    if (_eofed && empty()/* && _output.bytes_written() == _output.bytes_read()*/)
+    if (_eofed && empty())
     {
         std::cout << "== END ==" << std::endl;
         _output.end_input();
