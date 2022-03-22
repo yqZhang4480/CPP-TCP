@@ -17,7 +17,7 @@ ByteStream::ByteStream(const size_t capacity):channel(capacity+1),cap(capacity)
 }
 
 size_t ByteStream::write(const string &data) {
-    uint16_t i = 0;
+    uint32_t i = 0;
     if(end_flag == true){
         return 0;
     }
