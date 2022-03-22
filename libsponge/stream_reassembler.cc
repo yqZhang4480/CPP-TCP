@@ -1,5 +1,4 @@
 #include "stream_reassembler.hh"
-#include <iostream>
 // Dummy implementation of a stream reassembler.
 
 // For Lab 1, please replace with a real implementation that passes the
@@ -16,7 +15,7 @@ StreamReassembler::StreamReassembler(const size_t capacity) :
     _output(capacity), _capacity(capacity),
     _eofed(false),
     _first_unread(0), _first_unassembled(0), _first_unacceptable(0),
-    _buffer(capacity, 0), _count(capacity, 0) { cout << "== CTOR CALLED, CAP "<< capacity << " ==" << endl; }
+    _buffer(capacity, 0), _count(capacity, 0) {}
 
 //! \details This function accepts a substring (aka a segment) of bytes,
 //! possibly out-of-order, from the logical stream, and assembles any newly
@@ -36,14 +35,10 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         _first_unacceptable = _first_unacceptable < (real_index + 1) ? (real_index + 1) : _first_unacceptable;
         if (real_index >= _buffer.size())
         {
-            std::cout << "!!" << std::endl;
             break;
         }
         _buffer[real_index] = data[i];
         ++_count[real_index];
-        // cout << "#" << real_index << "#";
-        // cout << "$" << _first_unassembled << "$";
-        /* cout << "!" << _count[real_index] << "!" << endl; */
     }
 
 
@@ -57,31 +52,11 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
         s.push_back(_buffer[_first_unassembled]);
         ++_first_unassembled;
     }
-    if (s.length())
-    {
-        std::cout << "== assembled " << s.length() << " ==" << std::endl;
-    }
     
     _output.write(s);
 
-    std::cout << "len: " << data.length() << "\t";
-    std::cout << "idx: " << index << "\t";
-    std::cout << "eof: " << eof << "\t";
-    std::cout << "ure: " << _first_unread << "\t";
-    std::cout << "uas: " << _first_unassembled << "\t";
-    std::cout << "uac: " << _first_unacceptable << "\t";
-    std::cout << "written: " << _output.bytes_written() << "\t";
-    std::cout << "read: " << _output.bytes_read() << "\t";
-    std::cout << "bsize: " << _buffer.size() << std::endl;
-    /*for (size_t i = _first_unread; i < _first_unacceptable; i++)
-    {
-        std::cout << _count[i];
-    }
-    std::cout << std::endl;*/
-
     if (_eofed && empty())
     {
-        std::cout << "== END ==" << std::endl;
         _output.end_input();
     }
     
