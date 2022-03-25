@@ -4,7 +4,7 @@
 
 **TCP 发送方将其字节流分成短段**（每个子串不超过1460字节），以便使它们各自符合数据报的要求。**但网络在传输数据时可能会将这些数据报重新排序、丢弃、或者重复发送**。接收方必须**将这些片段重新组合成它们开始时的连续字节流**。
 
-**本实验需要编写负责重新组装的数据结构**，在实验代码中定义为 `StreamReassembler`。它将接收由一串字节组成的**子串**，以及该串在大流中的**第一个字节的索引**。流中的每个字节都有自己的唯一索引，从零开始递增。`StreamReassembler` 拥有一个用于输出的 `ByteStream`（在 lab0 实现），**一旦 `Reassembler` 知道流的下一个字节，就把它写入 `ByteStream` 中。**所有者可以随时访问并从 `ByteStream` 中读取。
+**本实验需要编写负责重新组装的数据结构**，在实验代码中定义为 `StreamReassembler`。它将接收由一串字节组成的**子串**，以及该串在大流中的**第一个字节的索引**。流中的每个字节都有自己的唯一索引，从零开始递增。`StreamReassembler` 拥有一个用于输出的 `ByteStream`（在 lab0 实现），**一旦 `Reassembler` 知道流的下一个字节，就把它写入 `ByteStream` 中**。所有者可以随时访问并从 `ByteStream` 中读取。
 
 代码中需要实现的 API 如下：
 
@@ -19,8 +19,8 @@ class StreamReassembler {
     // 超过容量的字节将被静默地丢弃。
     //
     // data:  子串
-	// index: 表示 data 中第一个字节的索引（序列中的位置）。
-	// eof:   为 true 时表示这个子串的最后一个字节是整个流中的最后一个字节。
+    // index: 表示 data 中第一个字节的索引（序列中的位置）。
+    // eof:   为 true 时表示这个子串的最后一个字节是整个流中的最后一个字节。
     void push_substring(const std::string &data, const uint64_t index, const bool eof);
 
     // 返回已经收到但并未写入 ByteStream 中的字节数。
