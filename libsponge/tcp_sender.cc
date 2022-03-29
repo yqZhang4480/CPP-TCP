@@ -24,15 +24,56 @@ TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const s
 
 uint64_t TCPSender::bytes_in_flight() const { return {}; }
 
-void TCPSender::fill_window() {}
+void TCPSender::fill_window()
+{
+    while (!_segmaents_buffer.full())
+    {
+        if (_stream.empty())
+        {
+            break;
+        }
+
+        auto segment = TCPSegment{};
+        segment.set_seqno(_next_seqno++);
+        segment.set_fin(_stream.eof());
+        segment.set_syn(false);
+        segment.set_payload(_stream.read(min(_stream.size(), TCPConfig::MAX_PAYLOAD_SIZE)));
+
+        _segmaents_buffer.push_back(segment);
+    }
+}
 
 //! \param ackno The remote receiver's ackno (acknowledgment number)
 //! \param window_size The remote receiver's advertised window size
-void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size) { DUMMY_CODE(ackno, window_size); }
+void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
+{
+    if (ackno > _first_not_acked)
+    {
+        /* code */
+    }
+    
+    _window_left = min(ackno, _first_not_acked);
+    _window_right = max(_window_right, ackno + window_size);
+    if (ackno == _first_not_acked)
+    {
+        _first_not_acked++;
+    }
+
+}
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
-void TCPSender::tick(const size_t ms_since_last_tick) { DUMMY_CODE(ms_since_last_tick); }
+void TCPSender::tick(const size_t ms_since_last_tick)
+{
+    auto ret = ms_since_last_tick - _last_tick;
+    _last_tick = ms_since_last_tick;
+    return ret;
+}
 
 unsigned int TCPSender::consecutive_retransmissions() const { return {}; }
 
-void TCPSender::send_empty_segment() {}
+void TCPSender::send_empty_segment()
+{
+    TCPSegment seg;
+    seg.set_ackno(_next_seqno);
+    _segments_out.push(seg);
+}
