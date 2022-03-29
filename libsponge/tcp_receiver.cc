@@ -11,10 +11,12 @@ void DUMMY_CODE(Targs &&... /* unused */) {}
 using namespace std;
 
 void TCPReceiver::segment_received(const TCPSegment &seg) {
-    TCPHeader head = seg.header();
-    if(head.syn){
-        _isn = head.seqno;
+    TCPHeader header = seg.header();
+    if(header.syn){
+        _isn = header.seqno.raw_value();
     }
+
+    uint64_t absqno = unwrap(header.seqno, WrappingInt32(_isn),  )
 }
 
 optional<WrappingInt32> TCPReceiver::ackno() const { return {}; }
