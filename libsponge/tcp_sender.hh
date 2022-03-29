@@ -8,13 +8,14 @@
 
 #include <cassert>
 #include <functional>
+#include <vector>
 #include <queue>
 
 struct TCPSegmentForSender
 {
   TCPSegment segment;
   bool acked;
-  uint32_t sent_tick;
+  uint32_t remaining_rto;
 };
 
 class TCPSegmentWindow
@@ -22,7 +23,7 @@ class TCPSegmentWindow
   private:
     std::deque<TCPSegmentForSender> _buffer;
     size_t _first_index;
-    size_t _window_size
+    size_t _window_size;
 
     const TCPSegmentForSender& _get(const uint32_t index) const
     {
@@ -53,9 +54,30 @@ class TCPSegmentWindow
       return _get(index).acked;
     }
 
-    uint32_t sent_tick(const uint32_t index) const
+    uint32_t remaining_rto(const uint32_t index) const
     {
-      return _get(index).sent_tick;
+      return _get(index).remaining_rto;
+    }
+
+    void set_remaining_rto(const uint32_t index, const uint32_t remaining_rto)
+    {
+      _get(index).remaining_rto = remaining_rto;
+    }
+
+    std::vector<size_t> tick(uint32_t ms_since_last_tick)
+    {
+      auto ret = std::vector<size_t>();
+      for (size_t i = 0; i < valid_size(); i++)
+      {
+        if (acked(i)) continue;
+        auto seg = _get(i + _first_index);
+        if (seg.remaining_rto <= ms_since_last_tick)
+        {
+          ret.push_back(i + _first_index);
+        }
+        seg.remaining_rto -= ms_since_last_tick;
+      }
+      return ret;
     }
 
     size_t size() const
@@ -210,7 +232,7 @@ class TCPSender {
     //! the (absolute) sequence number for the next byte to be sent
     uint64_t _next_seqno{0};
 
-    size_t _last_tick;
+    size_t _rto;
     TCPSegmentWindow _segments_buffer;
 
     void send(const TCPSegment& segment);

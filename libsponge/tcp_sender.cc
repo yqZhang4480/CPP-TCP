@@ -20,13 +20,15 @@ using namespace std;
 TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const std::optional<WrappingInt32> fixed_isn)
     : _isn(fixed_isn.value_or(WrappingInt32{random_device()()}))
     , _initial_retransmission_timeout{retx_timeout}
-    , _stream(capacity) {}
+    , _stream(capacity)
+    , _rto(retx_timeout)
+    , _segments_buffer(1) {}
 
 uint64_t TCPSender::bytes_in_flight() const { return {}; }
 
 void TCPSender::send(const TCPSegment &segment)
 {
-     _segments_out.push_back(segment);
+    _segments_out.push(segment);
 }
 
 void TCPSender::fill_window()
@@ -42,9 +44,9 @@ void TCPSender::fill_window()
         segment.set_seqno(_next_seqno++);
         segment.set_fin(_stream.eof());
         segment.set_syn(false);
-        segment.set_payload(_stream.read(min(_stream.size(), TCPConfig::MAX_PAYLOAD_SIZE)));
+        segment.set_payload(_stream.read(1));
 
-        _segmaents_buffer.push_back(segment, _last_tick);
+        _segmaents_buffer.push_back(segment, _rto);
         send(segment);
     }
 }
@@ -68,7 +70,13 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
 //! \param[in] ms_since_last_tick the number of millisconds since the last call to this method
 void TCPSender::tick(const size_t ms_since_last_tick)
 {
-    _last_tick += ms_since_last_tick;
+    auto need_retransmission = _segments_buffer.tick(ms_since_last_tick);
+
+    for (auto&& index : need_retransmission)
+    {
+        auto segment = _segments_buffer[index];
+        send(segment);
+    }
 }
 
 unsigned int TCPSender::consecutive_retransmissions() const { return {}; }
