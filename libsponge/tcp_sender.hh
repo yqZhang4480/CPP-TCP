@@ -15,16 +15,23 @@ struct TCPSegmentForSender
   TCPSegment segment;
   bool acked;
   uint32_t sent_tick;
-}
+};
 
 class TCPSegmentWindow
 {
   private:
     std::deque<TCPSegmentForSender> _buffer;
     size_t _first_index;
-    size_t _window_size;
+    size_t _window_size
 
-    TCPSegmentForSender& operator[] (const uint32_t index)
+    const TCPSegmentForSender& _get(const uint32_t index) const
+    {
+      auto real_index = index - _first_index;
+      if (real_index >= _buffer.size())
+        throw std::out_of_range("TCPSegmentWindow::operator[]");
+      return _buffer[real_index];
+    }
+    TCPSegmentForSender& _get(const uint32_t index)
     {
       auto real_index = index - _first_index;
       if (real_index >= _buffer.size())
@@ -33,20 +40,22 @@ class TCPSegmentWindow
     }
 
   public:
-    const TCPSegment& operator[] (const uint32_t index) const 
+    TCPSegmentWindow(const size_t window_size)
+      : _buffer(0), _first_index(0), _window_size(window_size) {}
+
+    TCPSegment& operator[](const uint32_t index)
     {
-      auto real_index = index - _first_index;
-      if (real_index >= _buffer.size())
-        throw std::out_of_range("TCPSegmentWindow::operator[]");
-      return _buffer[real_index].segment;
+      return _get(index).segment;
+    }
+
+    bool acked(const uint32_t index) const
+    {
+      return _get(index).acked;
     }
 
     uint32_t sent_tick(const uint32_t index) const
     {
-      auto real_index = index - _first_index;
-      if (real_index >= _buffer.size())
-        throw std::out_of_range("TCPSegmentWindow::sent_tick");
-      return _buffer[real_index].sent_tick;
+      return _get(index).sent_tick;
     }
 
     size_t size() const
@@ -61,18 +70,18 @@ class TCPSegmentWindow
 
     size_t valid_size() const
     {
-      return min(_window_size, _buffer.size());
+      return _window_size < _buffer.size() ? _window_size : _buffer.size();
     }
 
-    size_t acked_size() const
+    size_t front_acked_size() const
     {
       for (size_t i = 0; i < valid_size(); i++)
       {
         if (!_buffer[i].acked)
           return i;
       }
-      
-      return _valid_size(); // all acked
+
+      return valid_size(); // all acked
     }
 
     void ack_received(const uint32_t ackno)
@@ -83,19 +92,23 @@ class TCPSegmentWindow
 
     void advance(size_t step = 1)
     {
+      expand_back(step);
       shrink_front(step);
-      expend_back(step);
     }
 
     size_t shrink_front(size_t step = 1)
     {
+      if (_window_size < step)
+      {
+        throw std::out_of_range("TCPSegmentWindow::shrink_front");
+      }
+      _window_size -= step;
       _first_index += step;
       while (step--)
       {
-        _acked.pop_front();
         _buffer.pop_front();
       }
-      return _first_index;
+      return _window_size;
     }
 
     size_t expand_back(size_t step = 1)
@@ -104,9 +117,14 @@ class TCPSegmentWindow
       return _window_size;
     }
 
+    void set_window_size(size_t window_size)
+    {
+      _window_size = window_size;
+    }
+
     void push_back(const TCPSegment& s, uint32_t tick)
     {
-      _buffer.emplace_back({ s, false, tick });
+      _buffer.push_back( TCPSegmentForSender{s, false, tick} );
 
     #ifdef NDEBUG
     #undef NDEBUG
@@ -122,22 +140,32 @@ class TCPSegmentWindow
     void clear()
     {
       _buffer.clear();
-      _acked.clear();
       _first_index = 0;
       _window_size = 0;
     }
 
-    uint32_t first_index() const
+    size_t first_index() const
     {
       return _first_index;
     }
 
-    uint32_t last_index() const
+    size_t last_index() const
     {
       return _first_index + valid_size() - 1;
     }
 
+    size_t window_size()
+    {
+      return _window_size;
+    }
+
+
     bool empty() const
+    {
+      return _buffer.empty();
+    }
+
+    bool closed() const
     {
       return _window_size == 0;
     }
@@ -183,10 +211,9 @@ class TCPSender {
     uint64_t _next_seqno{0};
 
     size_t _last_tick;
-    TCPSegmentWindow _segmaents_buffer;
-    size_t _window_left;
-    size_t _window_right;
-    size_t _first_not_acked;
+    TCPSegmentWindow _segments_buffer;
+
+    void send(const TCPSegment& segment);
 
   public:
     //! Initialize a TCPSender

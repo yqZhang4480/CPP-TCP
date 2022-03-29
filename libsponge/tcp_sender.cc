@@ -24,6 +24,11 @@ TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const s
 
 uint64_t TCPSender::bytes_in_flight() const { return {}; }
 
+void TCPSender::send(const TCPSegment &segment)
+{
+     _segments_out.push_back(segment);
+}
+
 void TCPSender::fill_window()
 {
     while (!_segmaents_buffer.full())
@@ -39,7 +44,8 @@ void TCPSender::fill_window()
         segment.set_syn(false);
         segment.set_payload(_stream.read(min(_stream.size(), TCPConfig::MAX_PAYLOAD_SIZE)));
 
-        _segmaents_buffer.push_back(segment);
+        _segmaents_buffer.push_back(segment, _last_tick);
+        send(segment);
     }
 }
 
@@ -47,26 +53,22 @@ void TCPSender::fill_window()
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
 {
-    if (ackno > _first_not_acked)
+    if (_segments_buffer.contains(ackno))
     {
-        /* code */
-    }
-    
-    _window_left = min(ackno, _first_not_acked);
-    _window_right = max(_window_right, ackno + window_size);
-    if (ackno == _first_not_acked)
-    {
-        _first_not_acked++;
+        _segments_buffer.ack_received(ackno);
     }
 
+    _segments_buffer.shrink_front(_segments_buffer.front_acked_size());
+    if (_segments_buffer.window_size() < window_size)
+    {
+        _segments_buffer.set_window_size(window_size);
+    }
 }
 
-//! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
+//! \param[in] ms_since_last_tick the number of millisconds since the last call to this method
 void TCPSender::tick(const size_t ms_since_last_tick)
 {
-    auto ret = ms_since_last_tick - _last_tick;
-    _last_tick = ms_since_last_tick;
-    return ret;
+    _last_tick += ms_since_last_tick;
 }
 
 unsigned int TCPSender::consecutive_retransmissions() const { return {}; }

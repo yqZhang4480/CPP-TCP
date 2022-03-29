@@ -42,7 +42,7 @@ class TCPSegment {
     void set_seqno(const WrappingInt32 seqno) { _header.seqno = seqno; }
     void set_ackno(const WrappingInt32 ackno) { _header.ackno = ackno; }
     void set_cksum(const uint16_t cksum) { _header.cksum = cksum; }
-    void set_urgptr(const uint16_t urgptr) { _header.urgptr = urgptr; }
+    void set_urgptr(const uint16_t urgptr) { _header.uptr = urgptr; }
     void set_window_size(const uint16_t window_size) { _header.win = window_size; }
 };
 
