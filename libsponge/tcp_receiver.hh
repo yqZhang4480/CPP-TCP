@@ -19,7 +19,6 @@ class TCPReceiver {
     uint32_t _isn;  //initial sequence number
     bool _isSet= false; //is set isn
     uint64_t _checkpoint; //absoulte sequence number + 1
-
     //! The maximum number of bytes we'll store.
     size_t _capacity;
 

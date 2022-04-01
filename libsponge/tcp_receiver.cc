@@ -1,5 +1,5 @@
 #include "tcp_receiver.hh"
-
+#include <iostream>
 // Dummy implementation of a TCP receiver
 
 // For Lab 2, please replace with a real implementation that passes the
@@ -12,36 +12,46 @@ using namespace std;
 
 void TCPReceiver::segment_received(const TCPSegment &seg) {
     TCPHeader header = seg.header();
+
     if(header.syn){
         _isn = header.seqno.raw_value();
         _isSet = true;
         _checkpoint = 0;
+        cout<<"sqno:"<<header.seqno.raw_value()<<endl;
+        cout<<"_isn:"<<_isn<<"\n";
+    }
+    if(!_isSet){//没有接收到 isn 直接忽略所接收到的 segment
+        return;
     }
     uint64_t index = unwrap(header.seqno, WrappingInt32(_isn), _checkpoint);
+    uint64_t stream_index = index - 1;
+    if(header.syn){
+        stream_index += 1;
+    }
     if(header.fin){
-        if(index == 0){
-            _reassembler.push_substring(seg.payload().str().data(), index, true);
-        }else{
-            _reassembler.push_substring(seg.payload().str().data(), index - 1, true);
-        }
+        _reassembler.push_substring(seg.payload().str().data(), stream_index, true);
     }else{
-        if(index == 0){
-            _reassembler.push_substring(seg.payload().str().data(), index, false);
-        }else{
-            _reassembler.push_substring(seg.payload().str().data(), index - 1, false);
-        }
+        _reassembler.push_substring(seg.payload().str().data(), stream_index, false);
+    }
+    cout<<"index: "<<index<<"\n";
+    if(index + seg.length_in_sequence_space() >= _checkpoint){
+        _checkpoint  = index + seg.length_in_sequence_space();
     }
 
-    _checkpoint = index + seg.length_in_sequence_space();
 }
 
 std::optional<WrappingInt32> TCPReceiver::ackno() const {
     if(!_isSet){
         return nullopt;
     }else{
-        std::optional<WrappingInt32> opt(wrap(_reassembler.first_unassembled_value() + 1, WrappingInt32(_isn)));
+        cout<<"unassembled_bytes:"<<_reassembler.unassembled_bytes()<<"\n";
+        cout<<"_checkpoint:"<<_checkpoint<<"\n";
+        std::optional<WrappingInt32> opt(wrap( _checkpoint - _reassembler.distance(), WrappingInt32(_isn)));
         return opt;
     }
 }
 
-size_t TCPReceiver::window_size() const { return _reassembler.first_unaccepted_value() - _reassembler.first_unassembled_value();}
+size_t TCPReceiver::window_size() const { 
+
+    return  _reassembler.capacity_value() - _reassembler.stream_out().buffer_size();
+}
