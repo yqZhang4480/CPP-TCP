@@ -11,16 +11,16 @@
 #include <vector>
 #include <queue>
 
-struct TCPSegmentForSender
-{
-  TCPSegment segment;
-  bool acked;
-  uint32_t remaining_rto;
-};
-
 class TCPSegmentWindow
 {
   private:
+
+    struct TCPSegmentForSender
+    {
+      TCPSegment segment{};
+      bool acked{false};
+      uint32_t remaining_rto{0};
+    };
     std::deque<TCPSegmentForSender> _buffer;
     size_t _first_index;
     size_t _window_size;
@@ -199,7 +199,7 @@ class TCPSegmentWindow
 
     bool contains(const TCPSegment &segment) const
     {
-      return contains(segment.header().seqno);
+      return contains(segment.header().seqno.raw_value());
     }
 
     bool contains(const size_t index, const size_t length = 0) const

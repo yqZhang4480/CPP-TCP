@@ -33,20 +33,20 @@ void TCPSender::send(const TCPSegment &segment)
 
 void TCPSender::fill_window()
 {
-    while (!_segmaents_buffer.full())
+    while (!_segments_buffer.full())
     {
-        if (_stream.empty())
+        if (_stream.buffer_empty())
         {
             break;
         }
 
         auto segment = TCPSegment{};
-        segment.set_seqno(_next_seqno++);
+        segment.set_seqno(WrappingInt32(_next_seqno++));
         segment.set_fin(_stream.eof());
         segment.set_syn(false);
         segment.set_payload(_stream.read(1));
 
-        _segmaents_buffer.push_back(segment, _rto);
+        _segments_buffer.push_back(segment, _rto);
         send(segment);
     }
 }
@@ -55,9 +55,9 @@ void TCPSender::fill_window()
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
 {
-    if (_segments_buffer.contains(ackno))
+    if (_segments_buffer.contains(ackno.raw_value()))
     {
-        _segments_buffer.ack_received(ackno);
+        _segments_buffer.ack_received(ackno.raw_value());
     }
 
     _segments_buffer.shrink_front(_segments_buffer.front_acked_size());
@@ -69,7 +69,7 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
 
 //! \param[in] ms_since_last_tick the number of millisconds since the last call to this method
 void TCPSender::tick(const size_t ms_since_last_tick)
-{
+{ 
     auto need_retransmission = _segments_buffer.tick(ms_since_last_tick);
 
     for (auto&& index : need_retransmission)
@@ -84,6 +84,6 @@ unsigned int TCPSender::consecutive_retransmissions() const { return {}; }
 void TCPSender::send_empty_segment()
 {
     TCPSegment seg;
-    seg.set_ackno(_next_seqno);
+    seg.set_seqno(WrappingInt32(_next_seqno));
     _segments_out.push(seg);
 }
