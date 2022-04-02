@@ -6,10 +6,12 @@
 #include "tcp_segment.hh"
 #include "wrapping_integers.hh"
 
+#include <iostream>
 #include <cassert>
 #include <functional>
 #include <vector>
 #include <queue>
+#include <unordered_map>
 
 class TCPSegmentWindow
 {
@@ -18,18 +20,22 @@ class TCPSegmentWindow
     struct TCPSegmentForSender
     {
       TCPSegment segment{};
-      bool acked{false};
       uint32_t remaining_rto{0};
     };
     std::deque<TCPSegmentForSender> _buffer;
+
     size_t _first_index;
     size_t _window_size;
+    size_t _first_not_acked;
 
     const TCPSegmentForSender& _get(const uint32_t index) const
     {
       auto real_index = index - _first_index;
       if (real_index >= _buffer.size())
+      {
+        std::cout << "Index " << index << " RealIndex " << real_index << " is out of bounds" << std::endl;
         throw std::out_of_range("TCPSegmentWindow::operator[]");
+      }
       return _buffer[real_index];
     }
     TCPSegmentForSender& _get(const uint32_t index)
@@ -42,7 +48,7 @@ class TCPSegmentWindow
 
   public:
     TCPSegmentWindow(const size_t window_size)
-      : _buffer(0), _first_index(0), _window_size(window_size) {}
+      : _buffer(0), _first_index(0), _window_size(window_size), _first_not_acked(0) {}
 
     TCPSegment& operator[](const uint32_t index)
     {
@@ -51,7 +57,7 @@ class TCPSegmentWindow
 
     bool acked(const uint32_t index) const
     {
-      return _get(index).acked;
+      return _first_not_acked > index;
     }
 
     uint32_t remaining_rto(const uint32_t index) const
@@ -69,7 +75,7 @@ class TCPSegmentWindow
       auto ret = std::vector<size_t>();
       for (size_t i = 0; i < valid_size(); i++)
       {
-        if (acked(i)) continue;
+        if (acked(i + _first_index)) continue;
         auto seg = _get(i + _first_index);
         if (seg.remaining_rto <= ms_since_last_tick)
         {
@@ -80,36 +86,29 @@ class TCPSegmentWindow
       return ret;
     }
 
-    size_t size() const
-    {
-      return _window_size;
-    }
-
-    size_t capcity() const
-    {
-      return _buffer.size();
-    }
-
     size_t valid_size() const
     {
-      return _window_size < _buffer.size() ? _window_size : _buffer.size();
+      return std::min(_window_size, _buffer.size());
     }
 
-    size_t front_acked_size() const
+    size_t bytes_in_flight() const
     {
-      for (size_t i = 0; i < valid_size(); i++)
-      {
-        if (!_buffer[i].acked)
-          return i;
+      size_t ret = 0;
+      if (_buffer.empty())
+      { 
+        return 0;
       }
-
-      return valid_size(); // all acked
+      
+      for (size_t index = _first_not_acked; index <= last_index(); index++)
+      {
+        ret += _get(index).segment.payload().size();
+      }
+      return ret;
     }
 
-    void ack_received(const uint32_t ackno)
+    size_t acked_size() const
     {
-      auto& seg = _buffer[ackno - _first_index];
-      seg.acked = true;
+      return _first_not_acked - _first_index;
     }
 
     void advance(size_t step = 1)
@@ -146,17 +145,24 @@ class TCPSegmentWindow
 
     void push_back(const TCPSegment& s, uint32_t tick)
     {
-      _buffer.push_back( TCPSegmentForSender{s, false, tick} );
+      _buffer.push_back( TCPSegmentForSender{s, tick} );
+    }
 
-    #ifdef NDEBUG
-    #undef NDEBUG
-    #define NDEBUG_UNDEF
-    #endif
-      assert(s.seqno() == _buffer.size() - 1 + _first_index);
-    #ifdef NDEBUG_UNDEF
-    #define NDEBUG
-    #undef NDEBUG
-    #endif
+    void ack_received(WrappingInt32 ackno)
+    {
+      if (ackno.raw_value() - 1 >
+       _get(last_index()).segment.header().seqno.raw_value() + _get(last_index()).segment.payload().size())
+      {
+        std::cout << "Ackno " << ackno.raw_value() << " is out of bounds" << std::endl;
+        return;
+      }
+      while (_first_not_acked < _first_index + valid_size() &&
+             _get(_first_not_acked).segment.header().seqno.raw_value() <= ackno.raw_value())
+      {
+        ++_first_not_acked;
+      }
+      std::cout << "_first_not_acked " << _first_not_acked << std::endl;
+      advance(acked_size());
     }
 
     void clear()
@@ -173,12 +179,41 @@ class TCPSegmentWindow
 
     size_t last_index() const
     {
-      return _first_index + valid_size() - 1;
+      return _first_index + (valid_size() > 0 ? valid_size() - 1 : 0);
     }
 
-    size_t window_size()
+    size_t window_size() const
     {
       return _window_size;
+    }
+
+    size_t bytes_in_window() const
+    {
+      auto& s = _get(last_index());
+      std::cout << s.segment.header().seqno.raw_value() << " + " << s.segment.payload().size() << " - " << _get(first_index()).segment.header().seqno.raw_value() << std::endl;
+      return s.segment.header().seqno.raw_value() -
+       _get(first_index()).segment.header().seqno.raw_value() +
+        s.segment.payload().size();
+    }
+    size_t space() const
+    {
+      std::cout << "space()" << std::endl;
+      std::cout << "window size " << _window_size << " buffer size " << _buffer.size() << std::endl;
+      if (_window_size == 0)
+      {
+        return 0;
+      }
+      else if (_buffer.empty())
+      {
+        return _window_size;
+      }
+      
+      if (_window_size <= bytes_in_window())
+      {
+        return 0;
+      }
+
+      return _window_size - bytes_in_window();
     }
 
 
@@ -194,12 +229,7 @@ class TCPSegmentWindow
 
     bool full() const
     {
-      return _window_size <= _buffer.size();
-    }
-
-    bool contains(const TCPSegment &segment) const
-    {
-      return contains(segment.header().seqno.raw_value());
+      return space() == 0;
     }
 
     bool contains(const size_t index, const size_t length = 0) const
@@ -234,6 +264,8 @@ class TCPSender {
 
     size_t _rto;
     TCPSegmentWindow _segments_buffer;
+
+    bool _sent_syn;
 
     void send(const TCPSegment& segment);
 
