@@ -50,7 +50,9 @@ class StreamReassembler {
     //! \note If the byte at a particular index has been pushed more than once, it
     //! should only be counted once for the purpose of this function.
     size_t unassembled_bytes() const;
-
+    size_t capacity_value() const {return _capacity;}
+    size_t distance() const{return _first_unacceptable - _first_unassembled;}
+    size_t left() const{return _first_unassembled;}
     //! \brief Is the internal state empty (other than the output stream)?
     //! \returns `true` if no substrings are waiting to be assembled
     bool empty() const;
