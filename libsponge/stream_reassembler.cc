@@ -28,8 +28,7 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
     _buffer.resize(_first_unread + _capacity, 0);
     _count.resize(_first_unread + _capacity, 0);
     _eofed |= eof;
-
-    for (size_t i = 0; i < data.length(); i++)
+    for (size_t i = 0; i < data.size(); i++)
     {
         size_t real_index = index + i;
         _first_unacceptable = _first_unacceptable < (real_index + 1) ? (real_index + 1) : _first_unacceptable;
