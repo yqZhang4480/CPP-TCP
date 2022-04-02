@@ -1,5 +1,4 @@
 #include "wrapping_integers.hh"
-
 // Dummy implementation of a 32-bit wrapping integer
 
 // For Lab 2, please replace with a real implementation that passes the
@@ -8,14 +7,15 @@
 template <typename... Targs>
 void DUMMY_CODE(Targs &&... /* unused */) {}
 
+/* test passed */
 using namespace std;
 
 //! Transform an "absolute" 64-bit sequence number (zero-indexed) into a WrappingInt32
 //! \param n The input absolute 64-bit sequence number
 //! \param isn The initial sequence number
 WrappingInt32 wrap(uint64_t n, WrappingInt32 isn) {
-    DUMMY_CODE(n, isn);
-    return WrappingInt32{0};
+
+    return WrappingInt32(static_cast<uint32_t>(n+isn.raw_value()));
 }
 
 //! Transform a WrappingInt32 into an "absolute" 64-bit sequence number (zero-indexed)
@@ -28,7 +28,22 @@ WrappingInt32 wrap(uint64_t n, WrappingInt32 isn) {
 //! runs from the local TCPSender to the remote TCPReceiver and has one ISN,
 //! and the other stream runs from the remote TCPSender to the local TCPReceiver and
 //! has a different ISN.
+/* test unpassed */
 uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint) {
-    DUMMY_CODE(n, isn, checkpoint);
-    return {};
+    uint64_t out = 0;
+    
+out = static_cast<uint64_t>(static_cast<uint32_t>(n - isn));
+    out += (checkpoint>>32<<32);//将out 加上 checkpoint 高 32 位
+
+    if(out < checkpoint){
+        if(checkpoint - out > (1ul<<31) && (checkpoint>>32) < ((1ul<<32)-1)){
+            out = out + (1ul<<32);
+        }
+    }else{
+        if(out - checkpoint > (1ul<<31) && (checkpoint>>32)>1ul){
+            out = out - (1ul<<32);
+        }
+    }
+    return out;
+
 }
