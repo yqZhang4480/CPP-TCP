@@ -3,25 +3,25 @@
 #define PRIVATE
 
 PRIVATE
-void TCPSendingWindow::_shrink_front(size_t step)
+void TCPSendingWindow::_shrink_front(size_t size)
 {
-    if (_window_size < step)
+    if (_window_size < size)
     {
         throw std::runtime_error("Cannot shrink window by more than its size");
     }
-    _window_size -= step;
-    _first_seqno += step;
+    _window_size -= size;
+    _first_seqno += size;
 }
 PRIVATE
-void TCPSendingWindow::_expand_back(size_t step)
+void TCPSendingWindow::_expand_back(size_t size)
 {
-    _window_size += step;
+    _window_size += size;
 }
 PRIVATE
-void TCPSendingWindow::_advance(size_t step)
+void TCPSendingWindow::_advance(size_t size)
 {
-    _expand_back(step);
-    _shrink_front(step);
+    _expand_back(size);
+    _shrink_front(size);
 }
 PRIVATE
 void TCPSendingWindow::_set_window_size(size_t window_size)
@@ -55,24 +55,21 @@ void TCPSendingWindow::add_segment(const TCPSegment& segment, uint32_t rto)
 bool TCPSendingWindow::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
 {
     const auto ack_seqno = unwrap(ackno, _isn, _next_seqno);
+
+    // If the ACK is outside the window, ignore it
     if (ack_seqno > _next_seqno || ack_seqno < _first_seqno)
     {
         return false;
     }
+
+    // If the ACK is repeated, set the window size to the advertised value
     if (ack_seqno == _first_seqno)
     {
         _set_window_size(window_size);
         return false;
     }
 
-    // not buffer_empty() --
-    // a segment might be acked partially so that it not be erased from the buffer.
-    // buffer_empty() has to return true if the statment below returns true.
-    if (_next_seqno == _first_seqno)
-    {
-        return true;
-    }
-
+    // remove all segments that is fully acked
     size_t i = buffer_size() - 1;
     for (; i != size_t(-1); --i)
     {
@@ -85,6 +82,8 @@ bool TCPSendingWindow::ack_received(const WrappingInt32 ackno, const uint16_t wi
     }
 
     _buffer.erase(_buffer.begin(), _buffer.begin() + i);
+    //// We need the if statement below because
+    //// a segment cannot be erased simply if it be acked PARTIALLY.
     if (ack_seqno >= 
         unwrap(_buffer[0].segment.header().seqno, _isn, _next_seqno) +
         _buffer[0].segment.length_in_sequence_space())
@@ -92,6 +91,7 @@ bool TCPSendingWindow::ack_received(const WrappingInt32 ackno, const uint16_t wi
         _buffer.erase(_buffer.begin(), _buffer.begin() + 1);
     }
 
+    // set the window size to the advertised value
     _advance(unwrap(ackno, _isn, _next_seqno) - _first_seqno);
     _set_window_size(window_size);
     return true;
@@ -157,11 +157,6 @@ size_t TCPSendingWindow::bytes_in_flight() const
 }
 size_t TCPSendingWindow::space() const
 {
-    if (_window_size < bytes_in_flight())
-    {
-        return 0;
-    }
-    std::cout << "window size: " << _window_size << " bytes in flight: " << bytes_in_flight() << std::endl;
     return _window_size - bytes_in_flight();
 }
 bool TCPSendingWindow::full() const

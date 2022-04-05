@@ -60,7 +60,6 @@ void TCPSender::fill_window()
 
         TCPSegment s;
         s.set_seqno(wrap(_window.next_seqno(), _window.isn()));
-        std::cout << _stream.buffer_size() << std::endl;
         s.set_payload(_stream.read(min(_window.space(), min(TCPConfig::MAX_PAYLOAD_SIZE, _stream.buffer_size()))));
         
         s.set_fin(_stream.eof() && s.payload().size() < _window.space());
@@ -82,8 +81,10 @@ void TCPSender::fill_window()
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
 {
     _window_size_is_zero = window_size == 0;
+    // When filling window, treat a '0' window size as equal to '1'
     auto ret = _window.ack_received(ackno, max(window_size, uint16_t(1)));
 
+    // if we have acked some NEW data, reset the RTO and timers
     if (ret)
     {
         _rto = _initial_retransmission_timeout;
@@ -104,6 +105,8 @@ void TCPSender::tick(const size_t ms_since_last_tick)
         return;
     }
 
+    // When filling window, treat a '0' window size as equal to '1'
+    // but don't back off RTO
     if (!_window_size_is_zero)
     {
         _rto *= 2;

@@ -23,10 +23,10 @@ class TCPSendingWindow
     uint64_t _window_size;
     uint64_t _next_seqno;
 
-    void _shrink_front(size_t step = 1);
-    void _expand_back(size_t step = 1);
+    void _shrink_front(size_t size);
+    void _expand_back(size_t size);
 
-    void _advance(size_t step = 1);
+    void _advance(size_t size);
 
     void _set_window_size(size_t window_size);
 
