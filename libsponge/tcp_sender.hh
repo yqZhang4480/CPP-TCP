@@ -26,7 +26,9 @@ class TCPSender {
     size_t _rto;
     TCPSendingWindow _window;
 
-    size_t consecutive_retransmission_count;
+    size_t _consecutive_retransmission_count;
+    
+    bool _window_size_is_zero;
 
     void _send(const TCPSegment& segment);
 

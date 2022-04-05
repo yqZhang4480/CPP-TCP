@@ -1,5 +1,5 @@
 #include "tcp_sending_window.hh"
-
+#include <iostream>
 #define PRIVATE
 
 PRIVATE
@@ -54,12 +54,21 @@ void TCPSendingWindow::add_segment(const TCPSegment& segment, uint32_t rto)
 }
 bool TCPSendingWindow::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
 {
-    if (unwrap(ackno, _isn, _next_seqno) > _next_seqno ||
-     unwrap(ackno, _isn, _next_seqno) < _first_seqno)
+    const auto ack_seqno = unwrap(ackno, _isn, _next_seqno);
+    if (ack_seqno > _next_seqno || ack_seqno < _first_seqno)
     {
         return false;
     }
-    if (buffer_empty())
+    if (ack_seqno == _first_seqno)
+    {
+        _set_window_size(window_size);
+        return false;
+    }
+
+    // not buffer_empty() --
+    // a segment might be acked partially so that it not be erased from the buffer.
+    // buffer_empty() has to return true if the statment below returns true.
+    if (_next_seqno == _first_seqno)
     {
         return true;
     }
@@ -69,13 +78,19 @@ bool TCPSendingWindow::ack_received(const WrappingInt32 ackno, const uint16_t wi
     {
         auto& s = _buffer[i];
 
-        if (unwrap(ackno, _isn, _next_seqno) > unwrap(s.segment.header().seqno, _isn, _next_seqno))
+        if (ack_seqno > unwrap(s.segment.header().seqno, _isn, _next_seqno))
         {
             break;
         }
     }
 
-    _buffer.erase(_buffer.begin(), _buffer.begin() + i + 1);
+    _buffer.erase(_buffer.begin(), _buffer.begin() + i);
+    if (ack_seqno >= 
+        unwrap(_buffer[0].segment.header().seqno, _isn, _next_seqno) +
+        _buffer[0].segment.length_in_sequence_space())
+    {
+        _buffer.erase(_buffer.begin(), _buffer.begin() + 1);
+    }
 
     _advance(unwrap(ackno, _isn, _next_seqno) - _first_seqno);
     _set_window_size(window_size);
@@ -142,6 +157,11 @@ size_t TCPSendingWindow::bytes_in_flight() const
 }
 size_t TCPSendingWindow::space() const
 {
+    if (_window_size < bytes_in_flight())
+    {
+        return 0;
+    }
+    std::cout << "window size: " << _window_size << " bytes in flight: " << bytes_in_flight() << std::endl;
     return _window_size - bytes_in_flight();
 }
 bool TCPSendingWindow::full() const

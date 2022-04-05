@@ -22,7 +22,8 @@ TCPSender::TCPSender(const size_t capacity, const uint16_t retx_timeout, const s
     , _stream(capacity)
     , _rto(retx_timeout)
     , _window(fixed_isn.value_or(WrappingInt32{random_device()()}), 1)
-    , consecutive_retransmission_count{0}
+    , _consecutive_retransmission_count{0}
+    , _window_size_is_zero{false}
     {}
 
 uint64_t TCPSender::bytes_in_flight() const
@@ -54,17 +55,25 @@ void TCPSender::fill_window()
         // FIN_SENT or FIN_ACKED
         if (_stream.eof() and next_seqno_absolute() == _stream.bytes_written() + 2)
         {
-            return;
+            break;
         }
-        
+
         TCPSegment s;
         s.set_seqno(wrap(_window.next_seqno(), _window.isn()));
         std::cout << _stream.buffer_size() << std::endl;
         s.set_payload(_stream.read(min(_window.space(), min(TCPConfig::MAX_PAYLOAD_SIZE, _stream.buffer_size()))));
-        s.set_fin(_stream.eof() && !_window.full());
+        
+        s.set_fin(_stream.eof() && s.payload().size() < _window.space());
 
-        _window.add_segment(s, _rto);
-        _send(s);
+        if (s.length_in_sequence_space() != 0)
+        {
+            _window.add_segment(s, _rto);
+            _send(s);
+        }
+        else
+        {
+            break;
+        }
     }
 }
 
@@ -72,13 +81,14 @@ void TCPSender::fill_window()
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
 {
-    auto ret = _window.ack_received(ackno, window_size);
+    _window_size_is_zero = window_size == 0;
+    auto ret = _window.ack_received(ackno, max(window_size, uint16_t(1)));
 
     if (ret)
     {
         _rto = _initial_retransmission_timeout;
         _window.reset_timer(_rto);
-        consecutive_retransmission_count = 0;
+        _consecutive_retransmission_count = 0;
     }
 
     fill_window();
@@ -94,16 +104,19 @@ void TCPSender::tick(const size_t ms_since_last_tick)
         return;
     }
 
-    _rto *= 2;
+    if (!_window_size_is_zero)
+    {
+        _rto *= 2;
+    }
     _window.reset_timer(_rto);
     
-    consecutive_retransmission_count++;
+    _consecutive_retransmission_count++;
     _send(ret[0]);
 }
 
 unsigned int TCPSender::consecutive_retransmissions() const
 {
-    return consecutive_retransmission_count;
+    return _consecutive_retransmission_count;
 }
 
 void TCPSender::send_empty_segment()
