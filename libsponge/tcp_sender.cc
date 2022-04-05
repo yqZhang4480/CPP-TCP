@@ -37,8 +37,10 @@ void TCPSender::_send(const TCPSegment &segment)
 
 void TCPSender::fill_window()
 {
+    // CLOSED
     if (next_seqno_absolute() == 0)
     {
+        // CLOSED -> SYN_SENT
         TCPSegment segment;
         segment.set_syn(true);
         segment.set_seqno(wrap(_window.next_seqno(), _window.isn()));
@@ -49,6 +51,12 @@ void TCPSender::fill_window()
 
     while((!_stream.buffer_empty() || _stream.eof()) && !_window.full())
     {
+        // FIN_SENT or FIN_ACKED
+        if (_stream.eof() and next_seqno_absolute() == _stream.bytes_written() + 2)
+        {
+            return;
+        }
+        
         TCPSegment s;
         s.set_seqno(wrap(_window.next_seqno(), _window.isn()));
         std::cout << _stream.buffer_size() << std::endl;
@@ -64,8 +72,6 @@ void TCPSender::fill_window()
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
 {
-    
-
     auto ret = _window.ack_received(ackno, window_size);
 
     if (ret)
@@ -74,6 +80,8 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
         _window.reset_timer(_rto);
         consecutive_retransmission_count = 0;
     }
+
+    fill_window();
 }
 
 //! \param[in] ms_since_last_tick the number of millisconds since the last call to this method
