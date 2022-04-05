@@ -8,9 +8,9 @@
 
 [LAB1](https://github.com/yqZhang4480/CPP-TCP/tree/lab1)：通过
 
-[LAB2](https://github.com/yqZhang4480/CPP-TCP/tree/lab2)：正在进行
+[LAB2](https://github.com/yqZhang4480/CPP-TCP/tree/lab2)：通过
 
-[LAB3](https://github.com/yqZhang4480/CPP-TCP/tree/lab3)：正在进行
+[LAB3](https://github.com/yqZhang4480/CPP-TCP/tree/lab3)：通过
 
 LAB4：未开始
 
