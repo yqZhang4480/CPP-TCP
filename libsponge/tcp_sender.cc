@@ -46,13 +46,13 @@ void TCPSender::fill_window()
         _send(segment);
     }
 
-    while(!_stream.buffer_empty() && !_window.full())
+    while((!_stream.buffer_empty() || _stream.eof()) && !_window.full())
     {
         TCPSegment s;
         s.set_seqno(wrap(_window.next_seqno(), _window.isn()));
-        s.set_fin(_stream.eof());
         std::cout << _stream.buffer_size() << std::endl;
-        s.set_payload(_stream.read(min(TCPConfig::MAX_PAYLOAD_SIZE, _stream.buffer_size())));
+        s.set_payload(_stream.read(min(_window.space(), min(TCPConfig::MAX_PAYLOAD_SIZE, _stream.buffer_size()))));
+        s.set_fin(_stream.eof() && !_window.full());
 
         _window.add_segment(s, _rto);
         _send(s);
