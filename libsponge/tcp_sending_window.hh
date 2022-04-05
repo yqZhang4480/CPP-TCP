@@ -36,9 +36,10 @@ class TCPSendingWindow
     WrappingInt32 isn() const;
 
     void add_segment(const TCPSegment& segment, uint32_t rto);
-    void ack_received(const WrappingInt32 ackno, const uint16_t window_size);
+    bool ack_received(const WrappingInt32 ackno, const uint16_t window_size);
 
     std::vector<TCPSegment> tick(const size_t ms_elapsed);
+    void reset_timer(size_t rto);
 
     bool buffer_empty() const;
     size_t buffer_size() const;

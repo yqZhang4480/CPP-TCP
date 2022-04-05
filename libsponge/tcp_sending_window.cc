@@ -52,16 +52,16 @@ void TCPSendingWindow::add_segment(const TCPSegment& segment, uint32_t rto)
     _buffer.emplace_back(TCPSegmentForSender{segment, rto});
     _next_seqno = unwrap(segment.header().seqno, _isn, _next_seqno) + segment.length_in_sequence_space();
 }
-void TCPSendingWindow::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
+bool TCPSendingWindow::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
 {
     if (unwrap(ackno, _isn, _next_seqno) > _next_seqno ||
      unwrap(ackno, _isn, _next_seqno) < _first_seqno)
     {
-        return;
+        return false;
     }
     if (buffer_empty())
     {
-        return;
+        return true;
     }
 
     size_t i = buffer_size() - 1;
@@ -79,6 +79,7 @@ void TCPSendingWindow::ack_received(const WrappingInt32 ackno, const uint16_t wi
 
     _advance(unwrap(ackno, _isn, _next_seqno) - _first_seqno);
     _set_window_size(window_size);
+    return true;
 }
 
 std::vector<TCPSegment> 
@@ -99,6 +100,13 @@ TCPSendingWindow::tick(const size_t ms_elapsed)
     }
 
     return ret;
+}
+void TCPSendingWindow::reset_timer(size_t rto)
+{
+    for (auto &segment : _buffer)
+    {
+        segment.remaining_rto = rto;
+    }
 }
 
 bool TCPSendingWindow::buffer_empty() const
