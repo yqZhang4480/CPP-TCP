@@ -1,155 +1,87 @@
-<<<<<<< HEAD
-# CPP-TCP
-
-本仓库基于斯坦福大学计算机网络课程实验的 LAB0 - LAB4，目标是使用 C++ 实现 TCP 协议的主要功能。
-
-## 进度
-
-[LAB0](https://github.com/yqZhang4480/CPP-TCP/tree/lab0)：通过
-
-[LAB1](https://github.com/yqZhang4480/CPP-TCP/tree/lab1)：通过
-
-[LAB2](https://github.com/yqZhang4480/CPP-TCP/tree/lab2)：正在进行
-
-[LAB3](https://github.com/yqZhang4480/CPP-TCP/tree/lab3)：正在进行
-
-LAB4：未开始
-
-## 浏览仓库
-
-当项目完成后，主分支将包含所有测试全部通过后的成果。
-
-仓库包含 lab0 到 lab4 等分支，包含对应检查点的实验过程叙述，以及能够通过对应测试的阶段性成果。
-=======
-# CPP-TCP: LAB 1
+# CPP-TCP: LAB 3
 
 ## 问题
 
-**TCP 发送方将其字节流分成短段**（每个子串不超过1460字节），以便使它们各自符合数据报的要求。**但网络在传输数据时可能会将这些数据报重新排序、丢弃、或者重复发送**。接收方必须**将这些片段重新组合成它们开始时的连续字节流**。
+TCP是一个协议，通过不可靠的数据报可靠地传递一对流量控制的字节流（每个方向一个）。两方参与TCP连接，每一方同时作为 "发送方"（其自身发出的字节流）和 "接收方"（传入的字节流）。
 
-**本实验需要编写负责重新组装的数据结构**，在实验代码中定义为 `StreamReassembler`。它将接收由一串字节组成的**子串**，以及该串在大流中的**第一个字节的索引**。流中的每个字节都有自己的唯一索引，从零开始递增。`StreamReassembler` 拥有一个用于输出的 `ByteStream`（在 lab0 实现），**一旦 `Reassembler` 知道流的下一个字节，就把它写入 `ByteStream` 中**。所有者可以随时访问并从 `ByteStream` 中读取。
+TCP 发送方和接收方各自负责 TCPSegment 的一部分。TCP 发送方写入 LAB2 中与 TCP 接收方相关的 TCPSegment 的所有字段：即序列号、SYN 标志、有效载荷和 FIN 标志。然而，TCP发送方只读取由接收方写入的段中的字段：ackno 和窗口大小。
+
+TCPSender 的功能有：
+
+- 跟踪接收方的窗口（处理传入的acknos和窗口大小）。
+- 尽可能从 ByteStream 中读取数据并创建新的TCP段（如果需要的话，包括SYN和FIN标志），并发送之，来填充窗口。发送方应不断发送数据段，直到窗口满了或 ByteStream 空了。
+- 追踪哪些段已经发送但尚未被接收方完全确认（我们称这些段为未完成的段）。
+- 如果已经发送了足够长的时间，但还没有被确认，就重新发送未完成的段。
 
 代码中需要实现的 API 如下：
 
 ``` C++
-class StreamReassembler {
+class TCPSender {
    public:
-    
-    // 给定 capacity 构造流重组器。capacity 在运行过程中保持不变。
-    StreamReassembler(const size_t capacity);
+    // 告知 TCPSender 收到了 ACK
+    void ack_received(const WrappingInt32 ackno, const uint16_t window_size);
+
+    // 发送一个空段
+    void send_empty_segment();
 	
-    // 接收一个子串，并将任何新的连续字节写入 ByteStream 中，同时保持在 capacity 的内存限制之内。
-    // 超过容量的字节将被静默地丢弃。
-    //
-    // data:  子串
-    // index: 表示 data 中第一个字节的索引（序列中的位置）。
-    // eof:   为 true 时表示这个子串的最后一个字节是整个流中的最后一个字节。
-    void push_substring(const std::string &data, const uint64_t index, const bool eof);
-
-    // 返回已经收到但并未写入 ByteStream 中的字节数。
-    size_t unassembled_bytes() const;
+    // 创建尽可能多的数据段，直到填满窗口或读空 ByteStream。
+    void fill_window();
+	
+    // 告知 TCPSender 流逝的时间
+    void tick(const size_t ms_since_last_tick);
     
-    // 没有已经收到但并未写入 ByteStream 中的字节时返回 true。
-    bool empty() const;
+    // 返回有多少字节的数据（包括 SYN/FIN）已发送但未被确认
+    size_t bytes_in_flight() const;
+    
+    // 返回已经连续进行了多少次重传
+    unsigned int consecutive_retransmissions() const;
 };
 ```
 
-## 要点
+## 细节
 
-### 组装
+### window size 是字节数不是段数
 
-组装就是把已经收到的字节排好序并写入 `ByteStream` 的过程。由于 `StreamReassembler` 收到的子串可能是乱序、断续、重叠（不只是重复）的，因此需要将多个数据包的数据整合，将其连接成一段有序连续的字节串，然后写入 `ByteStream`。
+看了两遍文档才发现，很蠢的错误了。
 
-### `StreamReassembler` 需要维护一个字节缓冲
+### ByteStream 为空的条件：`buffer_empty() && !eof()`
 
-`ByteStream` 不允许随机写入，只能写到其已有数据的结尾，因此不是收到数据就写入，而需要先判断收到的数据中是否包含 `ByteStream` 所需的下一个字节，如有才可以写入。这样的过程必然需要维护一个字节缓冲。
+以下的循环控制语句可能会导致不发送 FIN：
 
-### 尽可能组装
+ ``` C++
+while(!_stream.buffer_empty() && !_window.full()) {...}
+ ```
 
-实验要求“*一旦 `Reassembler` 知道流的下一个字节，就把它写入 `ByteStream` 中*”。
+正确的处理是：
 
-### 正确处理 EOF
+ ``` C++
+while((!_stream.buffer_empty() || _stream.eof()) && !_window.full()) {...}
+ ```
 
-`StreamReassembler` 需要在合适的时机调用 `ByteStream::end_input()` 函数结束输入，向字节流表明此为数据的结尾。但 `StreamReassembler` 可能提前收到 `EOF` 标识，所以还要判断所有字节是否已被全部组装。若是则可结束输入。
+### 填满窗口
 
-### 正确处理 capacity
+填充窗口时，从流中读取的字节数应为 `_window.space(), TCPConfig::MAX_PAYLOAD_SIZE, _stream.buffer_size()` 三者中的最小值（`_window.space()` 为窗口剩余空间）。
 
-capacity 参数表示的含义是：字节流缓冲中未被读出部分的最大长度。”被读出“指已被 `ByteStream::read(n)` 输出。已被读出部分的长度可由 `ByteStream::bytes_read()` 获得。
+如果读到 EOF，应当尽量将 FIN 附在已有段上，除非窗口已满。
 
-因此，`StreamReassembler` 允许的最大索引为 `ByteStream::bytes_read() + capacity - 1 `，超出部分应当被丢弃，否则可能会过不了测试。
+### 超时重传
 
-## 实现
+当发生超时重传时有以下规则：
 
-``` C++
-/* stream_reassembler.hh */
-class StreamReassembler {
-  private:
-    ByteStream _output;
-    size_t _capacity;
-    
-    bool _eofed;
-    size_t _first_unread;
-    size_t _first_unassembled;
-    size_t _first_unacceptable;
-    std::vector<char> _buffer;
-    std::vector<size_t> _count;
+* 重传最早的未完成段。
+* 如果**窗口大小不为零**：
+  * 增加连续重传次数。
+  * RTO 变为原来的二倍。
+* 以上几条完成后，重置重传计时器。
+* 当 ACK 了**新的**数据：
+  * RTO 变为初始值。
+  * 重置重传计时器。
 
-  public:
-    StreamReassembler(const size_t capacity);
-    void push_substring(const std::string &data, const uint64_t index, const bool eof);
-    const ByteStream &stream_out() const;
-    ByteStream &stream_out();
-    size_t unassembled_bytes() const;
-    bool empty() const;
-};
+### ACK 包的处理
 
-/* stream_reassembler.cc */
-StreamReassembler::StreamReassembler(const size_t capacity) :
-    _output(capacity), _capacity(capacity),
-    _eofed(false),
-    _first_unread(0), _first_unassembled(0), _first_unacceptable(0),
-    _buffer(capacity, 0), _count(capacity, 0) {}
+有一些特殊情况值得注意：
 
-void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
-    _first_unread = _output.bytes_read();
-    _buffer.resize(_first_unread + _capacity, 0);
-    _count.resize(_first_unread + _capacity, 0);
-    _eofed |= eof;
-
-    for (size_t i = 0; i < data.length(); i++) {
-        size_t real_index = index + i;
-        _first_unacceptable = _first_unacceptable < (real_index + 1) ? (real_index + 1) : _first_unacceptable;
-        if (real_index >= _buffer.size()) break;
-        _buffer[real_index] = data[i];
-        ++_count[real_index];
-    }
-
-    auto s = std::string();
-    while (_count[_first_unassembled]) {
-        if (_first_unassembled == _buffer.size()) break;
-        s.push_back(_buffer[_first_unassembled]);
-        ++_first_unassembled;
-    }
-    
-    _output.write(s);
-
-    if (_eofed && empty()) _output.end_input();
-}
-
-const ByteStream &StreamReassembler::stream_out() const { return _output; }
-ByteStream &StreamReassembler::stream_out() { return _output; }
-
-size_t StreamReassembler::unassembled_bytes() const {
-    size_t count = 0;
-    for (size_t i = _first_unassembled; i < _first_unacceptable; i++)
-        count += !!_count[i];
-    
-    return count;
-}
-
-bool StreamReassembler::empty() const { 
-    return _first_unacceptable == _first_unassembled;
-}
-```
-
->>>>>>> origin/lab1
+* 如果 ackno 在**窗口外**，则丢弃之。
+* 如果 ackno 在**窗口最左端**，应当根据此包设置新的窗口大小。（依据具体实现，这种情况可能不需要单独考虑。）
+* **当且仅当**在以上两种情况下，收到的 ACK 包**没有确认新的数据**。
+* 发出的段可能被**部分** ACK。此时这个段依然是未完成的段。

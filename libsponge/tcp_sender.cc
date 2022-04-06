@@ -110,10 +110,10 @@ void TCPSender::tick(const size_t ms_since_last_tick)
     if (!_window_size_is_zero)
     {
         _rto *= 2;
+        _consecutive_retransmission_count++;
     }
     _window.reset_timer(_rto);
     
-    _consecutive_retransmission_count++;
     _send(ret[0]);
 }
 
