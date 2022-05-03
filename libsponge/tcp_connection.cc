@@ -46,18 +46,16 @@ void TCPConnection::segment_received(const TCPSegment &seg)
 
     _receiver.segment_received(seg);
 
-    if (seg.header().ack)
+    if (seg.header().ack and _sender.next_seqno_absolute() > 0)
     {
+        cout<<"segment ackno"<<seg.header().ackno<<"\n";
         _sender.ack_received(seg.header().ackno, seg.header().win);
     }
 
-    if (seg.length_in_sequence_space())
-    {
-        TCPSegment ack_seg;
-        ack_seg.header().ack = true;
-        ack_seg.header().ackno = _receiver.ackno();
-        ack_seg.header().win = _receiver.window_size();
-        _segments_out.push(ack_seg);
+    //SYN_SENT state connect
+    if(seg.header().syn and _sender.next_seqno_absolute()==0){
+        connect();
+        return;
     }
 
     if (_receiver.ackno().has_value() and
@@ -66,6 +64,8 @@ void TCPConnection::segment_received(const TCPSegment &seg)
     {
         _sender.send_empty_segment();
     }
+
+    push_segments_out();
 }
 
 bool TCPConnection::active() const
@@ -75,6 +75,7 @@ bool TCPConnection::active() const
 
 size_t TCPConnection::write(const string &data)
 {
+    
     return outbound_stream().write(data);
 }
 
@@ -84,17 +85,39 @@ void TCPConnection::tick(const size_t ms_since_last_tick)
     _time_since_last_segment_received += ms_since_last_tick;
     _sender.tick(ms_since_last_tick);
 
-    if (_sender.consecutive_retransmissions() > _cfg.max_retransmissions)
+
+    if (_sender.consecutive_retransmissions() > _cfg.MAX_RETX_ATTEMPTS)
     {
         _receiver.stream_out().set_error();
         _sender.stream_in().set_error();
 
         TCPSegment rst_seg;
         rst_seg.header().rst = true;
-        _segments_out.push(rst_seg);
+        _sender.segments_out().push(rst_seg);
     }
+    push_segments_out();
+    
+}
 
+
+
+void TCPConnection::push_segments_out()
+{
     _sender.fill_window();
+    queue<TCPSegment>& _sender_queue = _sender.segments_out();
+    TCPSegment segment;
+    while(!_sender_queue.empty()){
+        segment = _sender_queue.front();
+        cout<<"ackno:"<<_receiver.ackno().has_value()<<"\n";
+        _sender_queue.pop();
+        if(_receiver.ackno().has_value()){
+            segment.header().ack = true;
+            segment.header().ackno = _receiver.ackno().value();
+            segment.header().win = _receiver.window_size();
+        }
+       _segments_out.push(segment);
+    }
+    return;
 }
 
 void TCPConnection::end_input_stream()
@@ -104,7 +127,7 @@ void TCPConnection::end_input_stream()
 
 void TCPConnection::connect()
 {
-    _sender.fill_window();
+    push_segments_out();
 }
 
 TCPConnection::~TCPConnection() {

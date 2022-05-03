@@ -23,6 +23,7 @@ class TCPConnection {
     size_t _time_since_last_segment_received{0};
 
     //! \brief The outbound byte stream sent to the peer
+    const ByteStream &outbound_stream() const{ return _sender.stream_in(); }
     ByteStream &outbound_stream() { return _sender.stream_in(); }
 
   public:
@@ -68,6 +69,10 @@ class TCPConnection {
 
     //! Called when a new segment has been received from the network
     void segment_received(const TCPSegment &seg);
+
+
+    //put segment to _send.segment_out and put all segments in _send.segment_out to connection.segment_out 
+    void push_segments_out();
 
     //! Called periodically when time elapses
     void tick(const size_t ms_since_last_tick);
