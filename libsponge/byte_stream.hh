@@ -11,14 +11,13 @@
 //! and then no more bytes can be written.
 class ByteStream {
   private:
-    // Your code here -- add private members as necessary.
-    std::vector<uint8_t> channel;
-    size_t cap;//capacity
-    size_t r_index;//read_index
-    size_t w_index;//write_index
-    size_t read_bytes;
-    size_t written_bytes;
-    bool  end_flag;//input end flag
+    std::vector<uint8_t> _channel;
+    size_t _capacity;
+    size_t _read_index;
+    size_t _write_index;
+    size_t _bytes_read;
+    size_t _bytes_written;
+    bool  _end_flag;
   
 
     // Hint: This doesn't need to be a sophisticated data structure at
@@ -27,6 +26,10 @@ class ByteStream {
     // different approaches.
 
     bool _error{};  //!< Flag indicating that the stream suffered an error.
+
+    size_t _next_index_of(size_t index, size_t step = 1) const;
+
+    bool _buffer_full() const;
 
   public:
     //! Construct a stream with room for `capacity` bytes.

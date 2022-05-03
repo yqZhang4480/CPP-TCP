@@ -23,6 +23,9 @@ class StreamReassembler {
     std::vector<char> _buffer;
     std::vector<size_t> _count;
 
+    void _update_size();
+    void _update_output();
+
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
     //! \note This capacity limits both the bytes that have been reassembled,
