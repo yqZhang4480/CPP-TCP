@@ -29,6 +29,7 @@ class TCPSender {
     size_t _consecutive_retransmission_count;
     
     bool _window_size_is_zero;
+    bool _established{false};
 
     void _send(const TCPSegment& segment);
 
@@ -87,6 +88,12 @@ class TCPSender {
     //! \brief relative seqno for the next byte to be sent
     WrappingInt32 next_seqno() const { return wrap(_window.next_seqno(), _window.isn()); }
     //!@}
+
+    enum class SenderState
+    {
+      CLOSED, SYN_SENT, SYN_ACKED, ESTABLISHED, FIN_SENT, FIN_ACKED, ERROR
+    };
+    SenderState state() const;
 };
 
 #endif  // SPONGE_LIBSPONGE_TCP_SENDER_HH

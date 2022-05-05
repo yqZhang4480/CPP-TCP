@@ -20,11 +20,21 @@ class TCPConnection {
     //! for 10 * _cfg.rt_timeout milliseconds after both streams have ended,
     //! in case the remote TCPConnection doesn't know we've received its whole stream?
     bool _linger_after_streams_finish{true};
+    bool _active{true};
     size_t _time_since_last_segment_received{0};
 
     //! \brief The outbound byte stream sent to the peer
     const ByteStream &outbound_stream() const{ return _sender.stream_in(); }
     ByteStream &outbound_stream() { return _sender.stream_in(); }
+
+    void _add_ack_info(TCPSegment& ack_seg);
+
+    void _clean_shutdown();
+    void _unclean_shutdown();
+
+    void _reset_received();
+
+    void _collect_sender_segments_out();
 
   public:
     //! \name "Input" interface for the writer
@@ -71,8 +81,6 @@ class TCPConnection {
     void segment_received(const TCPSegment &seg);
 
 
-    //put segment to _send.segment_out and put all segments in _send.segment_out to connection.segment_out 
-    void push_segments_out();
 
     //! Called periodically when time elapses
     void tick(const size_t ms_since_last_tick);

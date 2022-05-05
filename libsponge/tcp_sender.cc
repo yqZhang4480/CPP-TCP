@@ -38,8 +38,7 @@ void TCPSender::_send(const TCPSegment &segment)
 
 void TCPSender::fill_window()
 {
-    // CLOSED
-    if (next_seqno_absolute() == 0)
+    if (state() == SenderState::CLOSED)
     {
         // CLOSED -> SYN_SENT
         TCPSegment segment;
@@ -53,7 +52,7 @@ void TCPSender::fill_window()
     while((!_stream.buffer_empty() || _stream.eof()) && !_window.full())
     {
         // FIN_SENT or FIN_ACKED
-        if (_stream.eof() and next_seqno_absolute() == _stream.bytes_written() + 2)
+        if (state() == SenderState::FIN_SENT or state() == SenderState::FIN_ACKED)
         {
             break;
         }
@@ -80,6 +79,7 @@ void TCPSender::fill_window()
 //! \param window_size The remote receiver's advertised window size
 void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_size)
 {
+    cout << "TCPSender::ack_received(ackno, win): " << ackno << " " << window_size << endl;
     _window_size_is_zero = window_size == 0;
     // When filling window, treat a '0' window size as equal to '1'
     auto ret = _window.ack_received(ackno, max(window_size, uint16_t(1)));
@@ -127,4 +127,36 @@ void TCPSender::send_empty_segment()
     TCPSegment segment;
     segment.set_seqno(wrap(_window.next_seqno(), _window.isn()));
     _send(segment);
+}
+
+TCPSender::SenderState TCPSender::state() const
+{
+    if (stream_in().error())
+    {
+        return SenderState::ERROR;
+    }
+    if (next_seqno_absolute() == 0)
+    {
+        return SenderState::CLOSED;
+    }
+    if (next_seqno_absolute() > 0 and next_seqno_absolute() == bytes_in_flight())
+    {
+        return SenderState::SYN_SENT;
+    }
+    if (next_seqno_absolute() > bytes_in_flight() and not stream_in().eof())
+    {
+        return SenderState::SYN_ACKED;
+    }
+    if (stream_in().eof() and next_seqno_absolute() < stream_in().bytes_written() + 2)
+    {
+        return SenderState::SYN_ACKED;
+    }
+    if (stream_in().eof() and next_seqno_absolute() == stream_in().bytes_written() + 2 and bytes_in_flight() > 0)
+    {
+        return SenderState::FIN_SENT;
+    }
+    else
+    {
+        return SenderState::FIN_ACKED;
+    }
 }
