@@ -187,10 +187,11 @@ void TCPConnection::segment_received(const TCPSegment &seg)
         {
             _receiver.segment_received(seg);
             _sender.ack_received(seg.header().ackno, seg.header().win);
-            _collect_sender_segments_out();
-        }
 
-        // ...
+            TCPSegment ack_seg;
+            _add_ack_info(ack_seg);
+            _segments_out.push(ack_seg);
+        }
     }
     // peer B: LAST_ACK -> CLOSED
     else if (state == TCPState(TCPState::State::LAST_ACK))
@@ -211,6 +212,18 @@ void TCPConnection::segment_received(const TCPSegment &seg)
             _receiver.segment_received(seg);
             _sender.ack_received(seg.header().ackno, seg.header().win);
             _collect_sender_segments_out();
+        }
+    }
+    else if (state == TCPState(TCPState::State::TIME_WAIT))
+    {
+        cout << "TCPConnection::segment_received: TIME_WAIT" << endl;
+        if (seg.header().ack)
+        {
+            _sender.ack_received(seg.header().ackno, seg.header().win);
+            
+            TCPSegment ack_seg;
+            _add_ack_info(ack_seg);
+            _segments_out.push(ack_seg);
         }
     }
 
@@ -259,7 +272,13 @@ void TCPConnection::tick(const size_t ms_since_last_tick)
         _unclean_shutdown();
         return;
     }
-    if (state == TCPState(TCPState::State::ESTABLISHED) || state == TCPState(TCPState::State::FIN_WAIT_1))
+    if (state == TCPState(TCPState::State::ESTABLISHED) ||
+        state == TCPState(TCPState::State::SYN_SENT) ||
+        state == TCPState(TCPState::State::SYN_RCVD) ||
+        state == TCPState(TCPState::State::FIN_WAIT_1) ||
+        state == TCPState(TCPState::State::CLOSE_WAIT) ||
+        state == TCPState(TCPState::State::CLOSING))
+
     {
         _collect_sender_segments_out();
     }
