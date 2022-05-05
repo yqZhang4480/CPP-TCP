@@ -199,8 +199,13 @@ void TCPConnection::segment_received(const TCPSegment &seg)
         cout << "TCPConnection::segment_received: LAST_ACK -> CLOSED" << endl;
         if (seg.header().ack)
         {
-            _linger_after_streams_finish = false;
-            _active = false;
+            _sender.ack_received(seg.header().ackno, seg.header().win);
+            if (_sender.state() == TCPSender::SenderState::FIN_ACKED)
+            {
+                _linger_after_streams_finish = false;
+                _active = false;
+            }
+
         }
     }
     // peer AB: CLOSING -> TIME_WAIT
@@ -214,10 +219,22 @@ void TCPConnection::segment_received(const TCPSegment &seg)
             _collect_sender_segments_out();
         }
     }
+    else if (state == TCPState(TCPState::State::CLOSE_WAIT))
+    {
+        cout << "TCPConnection::segment_received: CLOSE_WAIT" << endl;
+        if (seg.header().fin)
+        {
+            _sender.ack_received(seg.header().ackno, seg.header().win);
+            
+            TCPSegment ack_seg;
+            _add_ack_info(ack_seg);
+            _segments_out.push(ack_seg);
+        }
+    }
     else if (state == TCPState(TCPState::State::TIME_WAIT))
     {
         cout << "TCPConnection::segment_received: TIME_WAIT" << endl;
-        if (seg.header().ack)
+        if (seg.header().fin and seg.header().ack)
         {
             _sender.ack_received(seg.header().ackno, seg.header().win);
             
@@ -277,6 +294,7 @@ void TCPConnection::tick(const size_t ms_since_last_tick)
         state == TCPState(TCPState::State::SYN_RCVD) ||
         state == TCPState(TCPState::State::FIN_WAIT_1) ||
         state == TCPState(TCPState::State::CLOSE_WAIT) ||
+        state == TCPState(TCPState::State::LAST_ACK) ||
         state == TCPState(TCPState::State::CLOSING))
 
     {
