@@ -242,7 +242,8 @@ size_t TCPConnection::write(const string &data)
 void TCPConnection::tick(const size_t ms_since_last_tick)
 {
     _time_since_last_segment_received += ms_since_last_tick;
-    if (TCPState(_sender, _receiver, _active, _linger_after_streams_finish) == TCPState(TCPState::State::TIME_WAIT) and
+    auto state = TCPState(_sender, _receiver, _active, _linger_after_streams_finish);
+    if (state == TCPState(TCPState::State::TIME_WAIT) and
         _linger_after_streams_finish and _time_since_last_segment_received >= 10 * _cfg.rt_timeout)
     {
         cout << "TCPConnection::tick: LINGER_AFTER_STREAMS_FINISH" << endl;
@@ -258,8 +259,10 @@ void TCPConnection::tick(const size_t ms_since_last_tick)
         _unclean_shutdown();
         return;
     }
-
-    _collect_sender_segments_out();
+    if (state == TCPState(TCPState::State::ESTABLISHED) || state == TCPState(TCPState::State::FIN_WAIT_1))
+    {
+        _collect_sender_segments_out();
+    }
 }
 
 void TCPConnection::_collect_sender_segments_out()
