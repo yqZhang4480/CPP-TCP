@@ -12,7 +12,7 @@
 
 [LAB3](https://github.com/yqZhang4480/CPP-TCP/tree/lab3)：通过
 
-LAB4：未开始
+[LAB4](https://github.com/yqZhang4480/CPP-TCP/tree/lab4)：未完成
 
 ## 浏览仓库
 
