@@ -95,3 +95,4 @@ class ByteStream {
 };
 
 #endif  // SPONGE_LIBSPONGE_BYTE_STREAM_HH
+
