@@ -6,15 +6,12 @@
 
 // You will need to add private members to the class declaration in `stream_reassembler.hh`
 
-template <typename... Targs>
-void DUMMY_CODE(Targs &&... /* unused */) {}
-
 using namespace std;
 
 StreamReassembler::StreamReassembler(const size_t capacity) :
     _output(capacity), _capacity(capacity),
     _eofed(false),
-    _first_unread(0), _first_unassembled(0), _first_unacceptable(0),
+    _first_unassembled(0), _first_unacceptable(0),
     _buffer(capacity, 0), _count(capacity, 0) {}
 
 //! \details This function accepts a substring (aka a segment) of bytes,
@@ -22,67 +19,73 @@ StreamReassembler::StreamReassembler(const size_t capacity) :
 //! contiguous substrings and writes them into the output stream in order.
 void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof)
 {
-    DUMMY_CODE(data, index, eof);
-
-    _first_unread = _output.bytes_read();
-    _buffer.resize(_first_unread + _capacity, 0);
-    _count.resize(_first_unread + _capacity, 0);
-    _eofed |= eof;
-    for (size_t i = 0; i < data.size(); i++)
+    _first_unacceptable = _output.bytes_read() + _capacity;
+    _buffer.resize(_capacity - _output.buffer_size(), 0);
+    _count.resize(_capacity - _output.buffer_size(), 0);
+    if (index + data.size() <= _first_unacceptable)
     {
-        size_t real_index = index + i;
-        _first_unacceptable = _first_unacceptable < (real_index + 1) ? (real_index + 1) : _first_unacceptable;
-        if (real_index >= _buffer.size())
-        {
-            break;
-        }
-        _buffer[real_index] = data[i];
-        ++_count[real_index];
+        _eofed |= eof;
     }
 
-
-    auto s = std::string();
-    while (_count[_first_unassembled])
-    {
-        if (_first_unassembled == _buffer.size())
-        {
-            break;
-        }
-        s.push_back(_buffer[_first_unassembled]);
-        ++_first_unassembled;
-    }
-    
-    _output.write(s);
+    _put(data, index);
+    _assemble();
 
     if (_eofed && empty())
     {
         _output.end_input();
     }
-    
 }
 
-const ByteStream &StreamReassembler::stream_out() const
+void StreamReassembler::_put(const string &data, const size_t index)
 {
-    return _output;
+    for (size_t i = 0; i < data.length(); i++)
+    {
+        size_t real_index = index + i;
+        if (real_index < _first_unassembled)
+        {
+            continue;
+        }
+        if (real_index >= _first_unacceptable)
+        {
+            break;
+        }
+        size_t _buffer_index = real_index - _first_unassembled;
+        assert(_buffer_index < _buffer.size());
+        _buffer[_buffer_index] = data[i];
+        ++_count[_buffer_index];
+    }
 }
-ByteStream &StreamReassembler::stream_out()
+
+void StreamReassembler::_assemble()
 {
-    return _output;
+    auto s = std::string();
+    while (_count.front() && _output.buffer_size() < _capacity && !_buffer.empty())
+    {
+        s.push_back(_buffer.front());
+        _count.pop_front();
+        _buffer.pop_front();
+        ++_first_unassembled;
+    }
+    _output.write(s);
 }
+
+
+const ByteStream &StreamReassembler::stream_out() const { return _output; }
+ByteStream &StreamReassembler::stream_out() { return _output; }
 
 size_t StreamReassembler::unassembled_bytes() const
 {
     size_t count = 0;
 
-    for (size_t i = _first_unassembled; i < _first_unacceptable; i++)
+    for (const auto& n : _count)
     {
-        count += !!_count[i];
+        count += !!n;
     }
-    
+
     return count;
 }
 
 bool StreamReassembler::empty() const
 {
-    return _first_unacceptable == _first_unassembled;
+    return unassembled_bytes() == 0;
 }
