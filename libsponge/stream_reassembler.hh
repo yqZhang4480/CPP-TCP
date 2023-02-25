@@ -5,8 +5,8 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
-#include <map>
+#include <deque>
+#include <cassert>
 
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
@@ -17,11 +17,13 @@ class StreamReassembler {
     size_t _capacity;    //!< The maximum number of bytes
     
     bool _eofed;
-    size_t _first_unread;
     size_t _first_unassembled;
     size_t _first_unacceptable;
-    std::vector<char> _buffer;
-    std::vector<size_t> _count;
+    std::deque<char> _buffer;
+    std::deque<size_t> _count;
+
+    void _put(const std::string &data, const size_t index);
+    void _assemble();
 
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
