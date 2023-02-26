@@ -31,5 +31,5 @@ uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint)
 {
     auto c = wrap(checkpoint, isn);
     int64_t ret = checkpoint + (n - c);
-    return ret >= 0 ? ret : ret + (1ul << 32);
+    return (ret < 0 && static_cast<int64_t>(checkpoint) > 0) ? ret + (1ul << 32) : ret;
 }
