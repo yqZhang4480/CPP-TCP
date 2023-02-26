@@ -1,98 +1,95 @@
 #include "byte_stream.hh"
 
-// Dummy implementation of a flow-controlled in-memory byte stream.
-
-// For Lab 0, please replace with a real implementation that passes the
-// automated checks run by `make check_lab0`.
-
-// You will need to add private members to the class declaration in `byte_stream.hh`
-
-template <typename... Targs>
-void DUMMY_CODE(Targs &&... /* unused */) {}
-
 using namespace std;
 
-ByteStream::ByteStream(const size_t capacity):channel(capacity+1),cap(capacity)
-                        ,r_index(0),w_index(0),read_bytes(0),written_bytes(0),end_flag(false){ 
-}
+ByteStream::ByteStream(const size_t capacity)
+    : _channel(capacity + 1) // A ring buffer needs a redundant place to tell whether it is full or empty.
+    , _capacity(capacity)
+    , _read_index(0)
+    , _write_index(0)
+    , _bytes_read(0)
+    , _bytes_written(0)
+    , _end_flag(false) {}
 
-size_t ByteStream::write(const string &data) {
-    uint32_t i = 0;
-    if(end_flag == true){
+size_t ByteStream::write(const string &data)
+{
+    if (_end_flag)
+    {
         return 0;
     }
-    for(i = 0; (w_index+1)%(cap+1)!= r_index&&i < data.size(); i++){
-        channel[w_index] = data[i];
-        w_index = (w_index + 1)%(cap+1);
-        written_bytes++;
+
+    size_t bytes_count = 0;
+    while (!_buffer_full() && bytes_count < data.size())
+    {
+        _channel[_write_index] = data[bytes_count];
+        _write_index = _next_index_of(_write_index);
+        _bytes_written++;
+        bytes_count++;
     }
-    return i;//probably error
+    return bytes_count;
 }
 
-//! \param[in] len bytes will be copied from the output side of the buffer
-string ByteStream::peek_output(const size_t len) const {
-   std::vector<char> s(len);
-   size_t i = 0;
-   size_t r_i = r_index;
-   while(r_i!=w_index&&i < len){
-       s[i] = channel[r_i];
-       r_i = (r_i + 1)%(cap+1);
-       i++;
+string ByteStream::peek_output(const size_t len) const
+{
+   std::string ret;
+   size_t bytes_count = 0;
+
+   auto i = _read_index;
+   // There is no data to read if the read index is equal to the write index.
+   while(i != _write_index && bytes_count < len)
+   {
+       ret.push_back(_channel[i]);
+       i = _next_index_of(i);
+       bytes_count++;
    }
-   std::string str(s.begin(),s.begin() + i );
-   return str;
+   return ret;
 }
 
-//! \param[in] len bytes will be removed from the output side of the buffer
-void ByteStream::pop_output(const size_t len) {
-    size_t i = 0;
-    while(r_index!=w_index&& i < len){
-        r_index = (r_index + 1)%(cap + 1);
-        read_bytes++;
-        i++;
-    }
-    
- }
+void ByteStream::pop_output(const size_t len)
+{
+    size_t pop_len = min(len, buffer_size());
 
-//! Read (i.e., copy and then pop) the next "len" bytes of the stream
-//! \param[in] len bytes will be popped and returned
-//! \returns a string
-std::string ByteStream::read(const size_t len) {
-    std::vector<char> s(len);
-    size_t i = 0;
-    while(r_index!=w_index&&i < len){
-        s[i] = channel[r_index];
-        r_index = (r_index + 1)%(cap + 1);
-        read_bytes++;
-        i++;
-    }
-
-    std::string str(s.begin(),s.begin() + i);
-    return str;
+    _read_index = _next_index_of(_read_index, pop_len);
+    _bytes_read += pop_len;
 }
 
-void ByteStream::end_input() {
-    end_flag = true;
+std::string ByteStream::read(const size_t len)
+{
+    auto ret = peek_output(len);
+    pop_output(len);
+
+    return ret;
 }
 
-bool ByteStream::input_ended() const { 
-    return end_flag;
+size_t ByteStream::_next_index_of(size_t index, size_t step) const
+{
+    return (index + step % (_capacity + 1)) % (_capacity + 1);
 }
 
-size_t ByteStream::buffer_size() const { 
-    return (w_index - r_index + cap + 1)%(cap + 1);
+bool ByteStream::_buffer_full() const
+{
+    return _next_index_of(_write_index) == _read_index;
 }
 
-bool ByteStream::buffer_empty() const {
-    return w_index == r_index;
+void ByteStream::end_input()
+{
+    _end_flag = true;
 }
 
-bool ByteStream::eof() const { return end_flag&&w_index == r_index; }
+bool ByteStream::input_ended() const { return _end_flag; }
 
-size_t ByteStream::bytes_written() const { return written_bytes; }
+size_t ByteStream::buffer_size() const
+{
+    return ((_capacity + 1) + _write_index - _read_index) % (_capacity + 1);
+}
 
-size_t ByteStream::bytes_read() const {return read_bytes;} 
+bool ByteStream::buffer_empty() const { return _write_index == _read_index; }
 
-size_t ByteStream::remaining_capacity() const { 
-    return (r_index - w_index + cap)%(cap + 1);
- }
+bool ByteStream::eof() const { return _end_flag && buffer_empty(); }
+
+size_t ByteStream::bytes_written() const { return _bytes_written; }
+
+size_t ByteStream::bytes_read() const { return _bytes_read; }
+
+size_t ByteStream::remaining_capacity() const { return _capacity - buffer_size(); }
+
