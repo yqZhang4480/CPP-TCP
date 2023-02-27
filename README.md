@@ -17,11 +17,26 @@ TCP协议通过不可靠的数据报可靠地传递一对流量控制的字节�
   1. 在与偏移量的计算时出现了溢出。（例如offset=-1, checkpoint=0）此时需要修正结果，先把减掉的 offset 再加回去（消除上一步的影响），然后再无符号地加上 offset。这两步合在一起，只需给结果加上 `1ull << 32` 即可。
   2. 确实应该为 1。（例如offset=1, checkpoint=1ull<<63）这种情况几乎不存在，因为这意味着此次TCP连接传输至少了8EiB（约86亿GiB）的数据。所以本课程没有对这种情况进行任何测试。
 
-### 处理三种序列号
+### 处理 SYN/FIN
+
+对于 SYN 的处理，有以下两点：
+
+* 在收到 SYN 之前收到的任何数据都不要管。
+* 有 SYN 标志的包的 seqno 是 isn。
+
+对于 FIN 的处理，只需把它当作 EOF 交给上次实验中实现的 `StreamReassembler`。
+
+此外，SYN 和 FIN 都占用一个序列号，计算 ackno 时需要注意。
+
+### 处理三种序号
 
 绝对序列号可以直接用 `unwrap(header.seqno, WrappingInt32(_isn), ackno)` 得到。
 
-`stream_index` 的算法稍微复杂一些。当包中不包含 SYN 标志时，其值为绝对序列号-1，因为在 `stream_index` 中不计算 SYN 标志的位置；当包中包含 SYN 标志时，其值为绝对序列号+1-1，因为数据是从绝对序列号+1开始的。
+`stream_index` 的算法稍微复杂一些。当包中不包含 SYN 标志时，其值为绝对序列号减一，因为在 `stream_index` 中不计算 SYN 标志的位置；当包中包含 SYN 标志时，其值为绝对序列号加一再减一，因为数据是从绝对序列号+1开始的。
+
+### 处理收到的数据
+
+调用 `_reassembler.push_substring()` 即可。
 
 ### 计算 ackno
 
